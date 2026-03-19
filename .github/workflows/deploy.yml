@@ -1,0 +1,47 @@
+name: Deploy to VPS via NetBird
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Connect to NetBird
+        uses: Alemiz112/netbird-connect@v1
+        with:
+          setup-key: ${{ secrets.NETBIRD_SETUP_KEY }}
+          hostname: 'gh-actions-${{ github.run_id }}'
+
+      - name: Wait for NetBird connection
+        run: |
+          sleep 5
+          netbird status
+          ping -c 3 ${{ secrets.VPS_HOST }} || echo "Ping failed, trying SSH anyway..."
+
+      - name: Deploy via SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              -i ~/.ssh/deploy_key \
+              -p ${{ secrets.VPS_PORT }} \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'DEPLOY'
+          echo "Connected to VPS successfully!"
+          echo "Hostname: $(hostname)"
+          echo "Docker version: $(docker --version)"
+
+          # Example: deploy a docker compose stack
+          # cd /opt/myapp
+          # docker compose pull
+          # docker compose up -d
+          # docker compose ps
+
+          echo "Deployment complete!"
+          DEPLOY
